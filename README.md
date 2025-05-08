@@ -13,4 +13,5 @@ A barebones implementation of a gasback contract that implements [RIP-7767](http
    The base fees collected in a block will only be accrued into the `baseFeeVault` at the end of a block.
    Try not to empty ETH from the `RECIPIENT` when you are actually taking out ETH from it.
 
-4. For better developer quality of life, deploy the `gasbackBeacon` and use the system address to set the EOA `RECIPIENT`.
+4. For better discoverabiity (for the devX), deploy the `gasbackBeacon` and use the system address to set the EOA `RECIPIENT`.  
+   The exact CREATE2 instructions are in [`./deployments.md`](./deployments.md).
