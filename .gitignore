@@ -35,6 +35,6 @@ __pycache__/
 .hypothesis/
 wake-coverage.cov
 
-# Build files for CREATE2 deployments
-create2/
+# Create2 build files
 .tmp
+create2

@@ -19,27 +19,65 @@ contract Gasback {
     /*                          STORAGE                           */
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
 
-    /// @dev The gasback ratio numerator.
-    uint256 public gasbackRatioNumerator;
+    /// @dev Storage struct for the gasback contract.
+    struct GasbackStorage {
+        // The gasback ratio numerator.
+        uint256 gasbackRatioNumerator;
+        // If the base fee exceeds this, this contract becomes a pass through.
+        uint256 gasbackMaxBaseFee;
+        // The base fee vault predeploy on OP stack chains.
+        // If this contract used as an EIP-7702 delegated EOA which is also the
+        // recipient of the base fee vault, it can be configured to auto-pull
+        // funds from the base fee vault when it runs out of ETH.
+        address baseFeeVault;
+    }
 
-    /// @dev If the basefee exceeds this, this contract becomes a pass through.
-    uint256 public gasbackMaxBasefee;
+    /// @dev Returns a pointer to the storage struct.
+    function _getGasbackStorage() internal pure returns (GasbackStorage storage $) {
+        // Truncate to 9 bytes to reduce bytecode size.
+        uint256 s = uint72(bytes9(keccak256("GASBACK_STORAGE")));
+        /// @solidity memory-safe-assembly
+        assembly {
+            $.slot := s
+        }
+    }
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
     /*                        CONSTRUCTOR                         */
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
 
     constructor() payable {
-        gasbackRatioNumerator = 0.9 ether;
-        gasbackMaxBasefee = type(uint256).max;
+        GasbackStorage storage $ = _getGasbackStorage();
+        $.gasbackRatioNumerator = 0.9 ether;
+        $.gasbackMaxBaseFee = type(uint256).max;
+        $.baseFeeVault = 0x4200000000000000000000000000000000000019;
     }
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
-    /*               SYSTEM ADDRESS ONLY FUNCTIONS                */
+    /*                       VIEW FUNCTIONS                       */
+    /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
+
+    /// @dev The gasback ratio numerator.
+    function gasbackRatioNumerator() public view virtual returns (uint256) {
+        return _getGasbackStorage().gasbackRatioNumerator;
+    }
+
+    /// @dev If the base fee exceeds this, this contract becomes a pass through.
+    function gasbackMaxBaseFee() public view virtual returns (uint256) {
+        return _getGasbackStorage().gasbackMaxBaseFee;
+    }
+
+    /// @dev The base fee vault on OP stack chains.
+    function baseFeeVault() public view virtual returns (address) {
+        return _getGasbackStorage().baseFeeVault;
+    }
+
+    /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
+    /*                      ADMIN FUNCTIONS                       */
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
 
     /// @dev Withdraws ETH from this contract.
-    function withdraw(address to, uint256 amount) public onlySystem {
+    function withdraw(address to, uint256 amount) public onlySystemOrThis {
         /// @solidity memory-safe-assembly
         assembly {
             if iszero(call(gas(), to, amount, 0x00, 0x00, 0x00, 0x00)) { revert(0x00, 0x00) }
@@ -47,19 +85,25 @@ contract Gasback {
     }
 
     /// @dev Sets the numerator for the gasback ratio.
-    function setGasbackRatioNumerator(uint256 value) public onlySystem {
+    function setGasbackRatioNumerator(uint256 value) public onlySystemOrThis {
         require(value <= GASBACK_RATIO_DENOMINATOR);
-        gasbackRatioNumerator = value;
+        _getGasbackStorage().gasbackRatioNumerator = value;
     }
 
-    /// @dev Sets the max basefee.
-    function setGasbackMaxBasefee(uint256 value) public onlySystem {
-        gasbackMaxBasefee = value;
+    /// @dev Sets the max base fee.
+    function setGasbackMaxBaseFee(uint256 value) public onlySystemOrThis {
+        _getGasbackStorage().gasbackMaxBaseFee = value;
     }
 
-    /// @dev Guards the function such that it can only be called by the system contract.
-    modifier onlySystem() {
-        require(msg.sender == _SYSTEM_ADDRESS);
+    /// @dev Sets the base fee vault.
+    function setBaseFeeVault(address value) public onlySystemOrThis {
+        _getGasbackStorage().baseFeeVault = value;
+    }
+
+    /// @dev Guards the function such that it can only be called either by
+    /// the system contract, or by the contract itself (as an EIP-7702 delegated EOA).
+    modifier onlySystemOrThis() {
+        require(msg.sender == _SYSTEM_ADDRESS || msg.sender == address(this));
         _;
     }
 
@@ -75,14 +119,32 @@ contract Gasback {
         assembly {
             gasToBurn := calldataload(0x00)
             // The input must be exactly 32 bytes.
-            if iszero(eq(calldatasize(), 0x20)) { revert(0x00, 0x00) }
+            if iszero(eq(calldatasize(), 0x20)) {
+                // Use `invalid` to burn all the gas passed in efficiently via the self-call.
+                if eq(caller(), address()) { invalid() }
+                revert(0x00, 0x00)
+            }
         }
 
-        uint256 ethToGive =
-            (gasToBurn * block.basefee * gasbackRatioNumerator) / GASBACK_RATIO_DENOMINATOR;
+        GasbackStorage storage $ = _getGasbackStorage();
 
-        // If the contract has insufficient ETH, or if the basefee is too high.
-        if (ethToGive > address(this).balance || block.basefee > gasbackMaxBasefee) {
+        uint256 ethToGive =
+            (gasToBurn * block.basefee * $.gasbackRatioNumerator) / GASBACK_RATIO_DENOMINATOR;
+
+        // If the contract has insufficient ETH, try to pull from the base fee vault.
+        if (ethToGive > address(this).balance) {
+            address vault = $.baseFeeVault;
+            /// @solidity memory-safe-assembly
+            assembly {
+                if extcodesize(vault) {
+                    mstore(0x00, 0x3ccfd60b) // `withdraw()`.
+                    pop(call(gas(), vault, 0, 0x1c, 0x04, 0x00, 0x00))
+                }
+            }
+        }
+
+        // If the contract has insufficient ETH, or if the base fee is too high.
+        if (ethToGive > address(this).balance || block.basefee > $.gasbackMaxBaseFee) {
             // Do a pass through.
             ethToGive = 0;
             gasToBurn = 0;
@@ -93,7 +155,7 @@ contract Gasback {
             if gasToBurn {
                 let gasBefore := gas()
                 // Make a self-call to burn `gasToBurn`.
-                pop(staticcall(gasToBurn, address(), 0x00, 0x00, 0x00, 0x00))
+                pop(staticcall(gasToBurn, address(), 0x00, 0x01, 0x00, 0x00))
                 // Require that the amount of gas burned is greater or equal to `gasToBurn`.
                 if lt(sub(gasBefore, gas()), gasToBurn) { revert(0x00, 0x00) }
             }
@@ -115,11 +177,5 @@ contract Gasback {
     }
 
     /// @dev For depositing ETH.
-    receive() external payable {
-        /// @solidity memory-safe-assembly
-        assembly {
-            // Use `invalid` to burn all the gas passed in efficiently via the self-call.
-            if eq(caller(), address()) { invalid() }
-        }
-    }
+    receive() external payable {}
 }
