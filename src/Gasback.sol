@@ -77,27 +77,31 @@ contract Gasback {
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
 
     /// @dev Withdraws ETH from this contract.
-    function withdraw(address to, uint256 amount) public onlySystemOrThis {
+    function withdraw(address to, uint256 amount) public onlySystemOrThis returns (bool) {
         /// @solidity memory-safe-assembly
         assembly {
             if iszero(call(gas(), to, amount, 0x00, 0x00, 0x00, 0x00)) { revert(0x00, 0x00) }
         }
+        return true;
     }
 
     /// @dev Sets the numerator for the gasback ratio.
-    function setGasbackRatioNumerator(uint256 value) public onlySystemOrThis {
+    function setGasbackRatioNumerator(uint256 value) public onlySystemOrThis returns (bool) {
         require(value <= GASBACK_RATIO_DENOMINATOR);
         _getGasbackStorage().gasbackRatioNumerator = value;
+        return true;
     }
 
     /// @dev Sets the max base fee.
-    function setGasbackMaxBaseFee(uint256 value) public onlySystemOrThis {
+    function setGasbackMaxBaseFee(uint256 value) public onlySystemOrThis returns (bool) {
         _getGasbackStorage().gasbackMaxBaseFee = value;
+        return true;
     }
 
     /// @dev Sets the base fee vault.
-    function setBaseFeeVault(address value) public onlySystemOrThis {
+    function setBaseFeeVault(address value) public onlySystemOrThis returns (bool) {
         _getGasbackStorage().baseFeeVault = value;
+        return true;
     }
 
     /// @dev Guards the function such that it can only be called either by
