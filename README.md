@@ -2,7 +2,20 @@
 
 A barebones implementation of a gasback contract that implements [RIP-7767](https://github.com/ethereum/RIPs/blob/master/RIPS/rip-7767.md).
 
-## Suggested deployment for OP stack chains
+## Suggested setup for OP stack chains
+
+### Requirements
+
+- The `baseFeeVault` is deployed at `0x4200000000000000000000000000000000000019`.
+- The `WITHDRAWAL_NETWORK` of the `baseFeeVault` is set to `1`.
+
+### Via script
+
+See `script/Delegate7702.s.sol` for an automated script that can help you deploy.
+
+This script requires you to have the private key of the `baseFeeVault` recipient in your environment. 
+
+### Manual steps
 
 1. Deploy the `gasback` contract which will be used as an implementation via EIP-7702.
 
@@ -13,7 +26,7 @@ A barebones implementation of a gasback contract that implements [RIP-7767](http
      `900000000000000000`
    - `setGasbackMaxBaseFee(uint256)`  
      `115792089237316195423570985008687907853269984665640564039457584007913129639935`  
-   - `setBaseFeeVault(address)`  
+   - `setbaseFeeVault(address)`  
      `0x4200000000000000000000000000000000000019`
 
 4. Put or leave some ETH into the EOA `RECIPIENT`, which will be the actual `gasback` contract. 
