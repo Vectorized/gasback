@@ -13,7 +13,9 @@ A barebones implementation of a gasback contract that implements [RIP-7767](http
 
 See `script/Delegate7702.s.sol` for an automated script that can help you deploy.
 
-This script requires you to have the private key of the `baseFeeVault` recipient in your environment. 
+This script requires you to have the private key of the `baseFeeVault` recipient in your environment.
+
+For more information on how to run a foundry script, see `https://getfoundry.sh/guides/scripting-with-solidity`.
 
 ### Manual steps
 
