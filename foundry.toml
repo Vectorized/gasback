@@ -11,6 +11,7 @@ optimizer = true
 optimizer_runs = 1000
 via_ir = true
 gas_limit = 1_000_000_000 # ETH is 30M, but we use a higher value.
+always_use_create_2_factory = true
 remappings = [
   "murky=lib/murky",
   "dn404/=lib/dn404/src",

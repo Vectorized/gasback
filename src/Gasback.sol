@@ -104,6 +104,11 @@ contract Gasback {
         return true;
     }
 
+    /// @dev A noop function.
+    function noop() public payable returns (bool) {
+        return true;
+    }
+
     /// @dev Guards the function such that it can only be called either by
     /// the system contract, or by the contract itself (as an EIP-7702 delegated EOA).
     modifier onlySystemOrThis() {
