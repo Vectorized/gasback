@@ -28,7 +28,7 @@ For more information on how to run a foundry script, see `https://getfoundry.sh/
      `900000000000000000`
    - `setGasbackMaxBaseFee(uint256)`  
      `115792089237316195423570985008687907853269984665640564039457584007913129639935`  
-   - `setbaseFeeVault(address)`  
+   - `setBaseFeeVault(address)`  
      `0x4200000000000000000000000000000000000019`
 
 4. Put or leave some ETH into the EOA `RECIPIENT`, which will be the actual `gasback` contract. 
