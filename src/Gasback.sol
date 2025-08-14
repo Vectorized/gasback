@@ -146,10 +146,11 @@ contract Gasback {
         // If the contract has insufficient ETH, try to pull from the base fee vault.
         if (ethToGive > address(this).balance) {
             address vault = $.baseFeeVault;
-            if (vault.balance < $.minVaultBalance) revert();
+            uint256 minVaultBalance = $.minVaultBalance;
             /// @solidity memory-safe-assembly
             assembly {
                 if extcodesize(vault) {
+                    if lt(balance(vault), minVaultBalance) { revert(0x00, 0x00) }
                     mstore(0x00, 0x3ccfd60b) // `withdraw()`.
                     pop(call(gas(), vault, 0, 0x1c, 0x04, 0x00, 0x00))
                 }
