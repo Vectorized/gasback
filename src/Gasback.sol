@@ -107,6 +107,12 @@ contract Gasback {
         return true;
     }
 
+    /// @dev Sets the minimum balance of the base fee vault.
+    function setMinVaultBalance(uint256 value) public onlySystemOrThis returns (bool) {
+        _getGasbackStorage().minVaultBalance = value;
+        return true;
+    }
+
     /// @dev A noop function.
     function noop() public payable returns (bool) {
         return true;
