@@ -50,7 +50,7 @@ contract Gasback {
 
     constructor() payable {
         GasbackStorage storage $ = _getGasbackStorage();
-        $.gasbackRatioNumerator = 0.9 ether;
+        $.gasbackRatioNumerator = 0.8 ether;
         $.gasbackMaxBaseFee = type(uint256).max;
         $.baseFeeVault = 0x4200000000000000000000000000000000000019;
         $.minVaultBalance = 0.42 ether;
