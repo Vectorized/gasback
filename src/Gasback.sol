@@ -30,6 +30,8 @@ contract Gasback {
         // recipient of the base fee vault, it can be configured to auto-pull
         // funds from the base fee vault when it runs out of ETH.
         address baseFeeVault;
+        // The minimum balance of the base fee vault.
+        uint256 minVaultBalance;
     }
 
     /// @dev Returns a pointer to the storage struct.
@@ -51,6 +53,7 @@ contract Gasback {
         $.gasbackRatioNumerator = 0.9 ether;
         $.gasbackMaxBaseFee = type(uint256).max;
         $.baseFeeVault = 0x4200000000000000000000000000000000000019;
+        $.minVaultBalance = 0.42 ether;
     }
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
@@ -143,6 +146,7 @@ contract Gasback {
         // If the contract has insufficient ETH, try to pull from the base fee vault.
         if (ethToGive > address(this).balance) {
             address vault = $.baseFeeVault;
+            if (vault.balance < $.minVaultBalance) revert();
             /// @solidity memory-safe-assembly
             assembly {
                 if extcodesize(vault) {
