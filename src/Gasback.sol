@@ -161,7 +161,7 @@ contract Gasback {
                     mstore(0x00, 0x3ccfd60b) // `withdraw()`.
                     pop(call(gas(), vault, 0, 0x1c, 0x04, 0x00, 0x00))
                     // Return extra ETH to vault.
-                    
+                    pop(call(gas(), vault, sub(balance(address()), ethToGive), 0x00, 0x00, 0x00, 0x00))
                 }
             }
         }
