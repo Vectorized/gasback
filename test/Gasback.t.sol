@@ -21,7 +21,7 @@ contract GasbackTest is SoladyTest {
         vm.prank(pranker);
         (bool success,) = address(gasback).call(abi.encode(gasToBurn));
         assertTrue(success);
-        assertEq(pranker.balance, gasToBurn * baseFee * 0.9 ether / 1 ether);
+        assertEq(pranker.balance, gasToBurn * baseFee * 0.8 ether / 1 ether);
     }
 
     function testConvertGasback() public {
