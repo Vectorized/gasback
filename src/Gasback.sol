@@ -150,6 +150,7 @@ contract Gasback {
             /// @solidity memory-safe-assembly
             assembly {
                 if extcodesize(vault) {
+                    // If the vault has insufficient ETH, revert.
                     if lt(balance(vault), minVaultBalance) { revert(0x00, 0x00) }
                     mstore(0x00, 0x3ccfd60b) // `withdraw()`.
                     pop(call(gas(), vault, 0, 0x1c, 0x04, 0x00, 0x00))
