@@ -19,12 +19,29 @@ contract GasbackTest is SoladyTest {
         assertEq(pranker.balance, 0);
         vm.fee(baseFee);
         vm.prank(pranker);
-        (bool success,) = address(gasback).call(abi.encode(gasToBurn));
+        (bool success, ) = address(gasback).call(abi.encode(gasToBurn));
         assertTrue(success);
-        assertEq(pranker.balance, gasToBurn * baseFee * 0.8 ether / 1 ether);
+        assertEq(pranker.balance, (gasToBurn * baseFee * 0.8 ether) / 1 ether);
     }
 
     function testConvertGasback() public {
         testConvertGasback(100, 333);
+    }
+
+    function testConvertGasbackMaxBaseFee() public {
+        uint256 newMaxBaseFee = 42;
+        address system = 0xffffFFFfFFffffffffffffffFfFFFfffFFFfFFfE;
+        vm.prank(system);
+        gasback.setGasbackMaxBaseFee(newMaxBaseFee);
+        vm.fee(newMaxBaseFee + 1);
+
+        uint256 gasToBurn = 333;
+
+        address pranker = address(111);
+        assertEq(pranker.balance, 0);
+        vm.prank(pranker);
+        (bool success, ) = address(gasback).call(abi.encode(gasToBurn));
+        assertTrue(success);
+        assertEq(pranker.balance, 0);
     }
 }
