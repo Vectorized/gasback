@@ -19,7 +19,7 @@ contract GasbackTest is SoladyTest {
         assertEq(pranker.balance, 0);
         vm.fee(baseFee);
         vm.prank(pranker);
-        (bool success, ) = address(gasback).call(abi.encode(gasToBurn));
+        (bool success,) = address(gasback).call(abi.encode(gasToBurn));
         assertTrue(success);
         assertEq(pranker.balance, (gasToBurn * baseFee * 0.8 ether) / 1 ether);
     }
@@ -40,7 +40,7 @@ contract GasbackTest is SoladyTest {
         address pranker = address(111);
         assertEq(pranker.balance, 0);
         vm.prank(pranker);
-        (bool success, ) = address(gasback).call(abi.encode(gasToBurn));
+        (bool success,) = address(gasback).call(abi.encode(gasToBurn));
         assertTrue(success);
         assertEq(pranker.balance, 0);
     }
@@ -55,7 +55,7 @@ contract GasbackTest is SoladyTest {
         address pranker = address(111);
         assertEq(pranker.balance, 0);
         vm.prank(pranker);
-        (bool success, ) = address(gasback).call(abi.encode(gasToBurn));
+        (bool success,) = address(gasback).call(abi.encode(gasToBurn));
         assertTrue(success);
         assertEq(pranker.balance, 0);
     }
@@ -71,7 +71,7 @@ contract GasbackTest is SoladyTest {
         address pranker = address(111);
         assertEq(pranker.balance, 0);
         vm.prank(pranker);
-        (bool success, ) = address(gasback).call(abi.encode(gasToBurn));
+        (bool success,) = address(gasback).call(abi.encode(gasToBurn));
         assertTrue(success);
         assertEq(pranker.balance, 0);
     }
