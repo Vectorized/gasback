@@ -156,12 +156,13 @@ contract Gasback {
             /// @solidity memory-safe-assembly
             assembly {
                 if extcodesize(vault) {
-                    // If the vault has insufficient ETH, revert.
-                    if lt(balance(vault), add(sub(ethToGive, balance(address())), minBalance)) { revert(0x00, 0x00) }
-                    mstore(0x00, 0x3ccfd60b) // `withdraw()`.
-                    pop(call(gas(), vault, 0, 0x1c, 0x04, 0x00, 0x00))
-                    // Return extra ETH to vault.
-                    pop(call(gas(), vault, sub(balance(address()), ethToGive), 0x00, 0x00, 0x00, 0x00))
+                    // If the vault has sufficient ETH, pull from it.
+                    if gt(balance(vault), add(sub(ethToGive, balance(address())), minBalance)) {
+                        mstore(0x00, 0x3ccfd60b) // `withdraw()`.
+                        pop(call(gas(), vault, 0, 0x1c, 0x04, 0x00, 0x00))
+                        // Return extra ETH to vault.
+                        pop(call(gas(), vault, sub(balance(address()), ethToGive), 0x00, 0x00, 0x00, 0x00))
+                    }
                 }
             }
         }
