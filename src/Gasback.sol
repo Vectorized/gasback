@@ -32,7 +32,7 @@ contract Gasback {
         address baseFeeVault;
         // The minimum balance of the base fee vault.
         uint256 minVaultBalance;
-        // The amount of ETH accrued that can be safely withdrawn by the owner
+        // The amount of ETH accrued by taking a cut from the gas burned.
         uint256 accrued;
         // A mapping of addresses authorized to withdraw the accrued ETH.
         mapping(address => bool) accuralWithdrawers;
