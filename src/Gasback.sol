@@ -197,19 +197,20 @@ contract Gasback {
             $.accrued += ethFromGas - ethToGive;
         }
 
+        uint256 selfBalance = address(this).balance;
         // If the contract has insufficient ETH, try to pull from the base fee vault.
-        if (ethToGive > address(this).balance) {
+        if (ethToGive > selfBalance) {
             address vault = $.baseFeeVault;
             uint256 minBalance = $.minVaultBalance;
             /// @solidity memory-safe-assembly
             assembly {
                 if extcodesize(vault) {
                     // If the vault has sufficient ETH, pull from it.
-                    if gt(balance(vault), add(sub(ethToGive, selfbalance()), minBalance)) {
+                    if gt(balance(vault), add(sub(ethToGive, selfBalance), minBalance)) {
                         mstore(0x00, 0x3ccfd60b) // `withdraw()`.
                         pop(call(gas(), vault, 0, 0x1c, 0x04, 0x00, 0x00))
-                        // We shall skip refunding back to the vault,
-                        // to simplify ETH accrual logic.
+                        // Return ETH to vault to ensure that it has `minBalance`.
+                        pop(call(gas(), vault, minBalance, 0x00, 0x00, 0x00, 0x00))
                     }
                 }
             }
