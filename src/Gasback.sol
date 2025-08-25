@@ -30,6 +30,10 @@ contract Gasback {
         // recipient of the base fee vault, it can be configured to auto-pull
         // funds from the base fee vault when it runs out of ETH.
         address baseFeeVault;
+        // The amount of ETH accrued that can be safely withdrawn by the owner
+        uint256 accrued;
+        // A mapping of addresses authorized to withdraw the accrued ETH.
+        mapping(address => bool) accuralWithdrawers;
     }
 
     /// @dev Returns a pointer to the storage struct.
@@ -70,6 +74,41 @@ contract Gasback {
     /// @dev The base fee vault on OP stack chains.
     function baseFeeVault() public view virtual returns (address) {
         return _getGasbackStorage().baseFeeVault;
+    }
+
+    /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
+    /*                     ACCURAL FUNCTIONS                      */
+    /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
+
+    /// @dev Returns the amount of ETH accrued.
+    function accrued() public view virtual returns (uint256) {
+        return _getGasbackStorage().accrued;
+    }
+
+    /// @dev Withdraws from the accrued amount.
+    function withdrawAccrued(address to, uint256 amount) public virtual returns (bool) {
+        require(_getGasbackStorage().accuralWithdrawers[msg.sender]);
+        // Checked math prevents underflow.
+        _getGasbackStorage().accrued -= amount;
+        /// @solidity memory-safe-assembly
+        assembly {
+            if iszero(call(gas(), to, amount, 0x00, 0x00, 0x00, 0x00)) { revert(0x00, 0x00) }
+        }
+        return true;
+    }
+
+    /// @dev Returns whether `addr` is authorized to call `withdrawAccrued`.
+    function isAuthorizedAccuralWithdrawer(address addr) public view virtual returns (bool) {
+        return _getGasbackStorage().accuralWithdrawers[addr];
+    }
+
+    /// @dev Set whether `addr` is authorized to call `withdrawAccrued`.
+    function setAccuralWithdrawer(address addr, bool authorized)
+        public
+        onlySystemOrThis
+        returns (bool)
+    {
+        _getGasbackStorage().accuralWithdrawers[addr] = authorized;
     }
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
@@ -137,8 +176,11 @@ contract Gasback {
 
         GasbackStorage storage $ = _getGasbackStorage();
 
-        uint256 ethToGive =
-            (gasToBurn * block.basefee * $.gasbackRatioNumerator) / GASBACK_RATIO_DENOMINATOR;
+        uint256 ethFromGas = gasToBurn * block.basefee;
+        uint256 ethToGive = (ethFromGas * $.gasbackRatioNumerator) / GASBACK_RATIO_DENOMINATOR;
+        unchecked {
+            $.accrued += ethFromGas - ethToGive;
+        }
 
         // If the contract has insufficient ETH, try to pull from the base fee vault.
         if (ethToGive > address(this).balance) {
