@@ -32,6 +32,10 @@ contract Gasback {
         address baseFeeVault;
         // The minimum balance of the base fee vault.
         uint256 minVaultBalance;
+        // The amount of ETH accrued by taking a cut from the gas burned.
+        uint256 accrued;
+        // A mapping of addresses authorized to withdraw the accrued ETH.
+        mapping(address => bool) accuralWithdrawers;
     }
 
     /// @dev Returns a pointer to the storage struct.
@@ -73,6 +77,47 @@ contract Gasback {
     /// @dev The base fee vault on OP stack chains.
     function baseFeeVault() public view virtual returns (address) {
         return _getGasbackStorage().baseFeeVault;
+    }
+
+    /// @dev The minimum balance of the base fee vault that allows a pull withdrawal.
+    function minVaultBalance() public view virtual returns (uint256) {
+        return _getGasbackStorage().minVaultBalance;
+    }
+
+    /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
+    /*                     ACCURAL FUNCTIONS                      */
+    /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
+
+    /// @dev Returns the amount of ETH accrued.
+    function accrued() public view virtual returns (uint256) {
+        return _getGasbackStorage().accrued;
+    }
+
+    /// @dev Withdraws from the accrued amount.
+    function withdrawAccrued(address to, uint256 amount) public virtual returns (bool) {
+        require(_getGasbackStorage().accuralWithdrawers[msg.sender]);
+        // Checked math prevents underflow.
+        _getGasbackStorage().accrued -= amount;
+        /// @solidity memory-safe-assembly
+        assembly {
+            if iszero(call(gas(), to, amount, 0x00, 0x00, 0x00, 0x00)) { revert(0x00, 0x00) }
+        }
+        return true;
+    }
+
+    /// @dev Returns whether `addr` is authorized to call `withdrawAccrued`.
+    function isAuthorizedAccuralWithdrawer(address addr) public view virtual returns (bool) {
+        return _getGasbackStorage().accuralWithdrawers[addr];
+    }
+
+    /// @dev Set whether `addr` is authorized to call `withdrawAccrued`.
+    function setAccuralWithdrawer(address addr, bool authorized)
+        public
+        onlySystemOrThis
+        returns (bool)
+    {
+        _getGasbackStorage().accuralWithdrawers[addr] = authorized;
+        return true;
     }
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
@@ -146,8 +191,11 @@ contract Gasback {
 
         GasbackStorage storage $ = _getGasbackStorage();
 
-        uint256 ethToGive =
-            (gasToBurn * block.basefee * $.gasbackRatioNumerator) / GASBACK_RATIO_DENOMINATOR;
+        uint256 ethFromGas = gasToBurn * block.basefee;
+        uint256 ethToGive = (ethFromGas * $.gasbackRatioNumerator) / GASBACK_RATIO_DENOMINATOR;
+        unchecked {
+            $.accrued += ethFromGas - ethToGive;
+        }
 
         // If the contract has insufficient ETH, try to pull from the base fee vault.
         if (ethToGive > address(this).balance) {
@@ -157,21 +205,11 @@ contract Gasback {
             assembly {
                 if extcodesize(vault) {
                     // If the vault has sufficient ETH, pull from it.
-                    if gt(balance(vault), add(sub(ethToGive, balance(address())), minBalance)) {
+                    if gt(balance(vault), add(sub(ethToGive, selfbalance()), minBalance)) {
                         mstore(0x00, 0x3ccfd60b) // `withdraw()`.
                         pop(call(gas(), vault, 0, 0x1c, 0x04, 0x00, 0x00))
-                        // Return extra ETH to vault.
-                        pop(
-                            call(
-                                gas(),
-                                vault,
-                                sub(balance(address()), ethToGive),
-                                0x00,
-                                0x00,
-                                0x00,
-                                0x00
-                            )
-                        )
+                        // We shall skip refunding back to the vault,
+                        // to simplify ETH accrual logic.
                     }
                 }
             }
