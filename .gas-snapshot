@@ -1,0 +1,8 @@
+GasbackTest:testConvertGasback() (gas: 50450)
+GasbackTest:testConvertGasback(uint256,uint256) (runs: 256, μ: 370473, ~: 135584)
+GasbackTest:testConvertGasbackBaseFeeVault() (gas: 24310)
+GasbackTest:testConvertGasbackMaxBaseFee() (gas: 21878)
+GasbackTest:testConvertGasbackMinVaultBalance() (gas: 24154)
+GasbackTest:test__codesize() (gas: 8178)
+SoladyTest:test__codesize() (gas: 4099)
+TestPlus:test__codesize() (gas: 393)
