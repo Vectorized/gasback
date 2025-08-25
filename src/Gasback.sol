@@ -30,6 +30,8 @@ contract Gasback {
         // recipient of the base fee vault, it can be configured to auto-pull
         // funds from the base fee vault when it runs out of ETH.
         address baseFeeVault;
+        // The minimum balance of the base fee vault.
+        uint256 minVaultBalance;
         // The amount of ETH accrued that can be safely withdrawn by the owner
         uint256 accrued;
         // A mapping of addresses authorized to withdraw the accrued ETH.
@@ -52,9 +54,10 @@ contract Gasback {
 
     constructor() payable {
         GasbackStorage storage $ = _getGasbackStorage();
-        $.gasbackRatioNumerator = 0.9 ether;
+        $.gasbackRatioNumerator = 0.8 ether;
         $.gasbackMaxBaseFee = type(uint256).max;
         $.baseFeeVault = 0x4200000000000000000000000000000000000019;
+        $.minVaultBalance = 0.42 ether;
     }
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
@@ -74,6 +77,11 @@ contract Gasback {
     /// @dev The base fee vault on OP stack chains.
     function baseFeeVault() public view virtual returns (address) {
         return _getGasbackStorage().baseFeeVault;
+    }
+
+    /// @dev The minimum balance of the base fee vault that allows a pull withdrawal.
+    function minVaultBalance() public view virtual returns (uint256) {
+        return _getGasbackStorage().minVaultBalance;
     }
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
@@ -109,6 +117,7 @@ contract Gasback {
         returns (bool)
     {
         _getGasbackStorage().accuralWithdrawers[addr] = authorized;
+        return true;
     }
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
@@ -140,6 +149,12 @@ contract Gasback {
     /// @dev Sets the base fee vault.
     function setBaseFeeVault(address value) public onlySystemOrThis returns (bool) {
         _getGasbackStorage().baseFeeVault = value;
+        return true;
+    }
+
+    /// @dev Sets the minimum balance of the base fee vault.
+    function setMinVaultBalance(uint256 value) public onlySystemOrThis returns (bool) {
+        _getGasbackStorage().minVaultBalance = value;
         return true;
     }
 
@@ -185,11 +200,17 @@ contract Gasback {
         // If the contract has insufficient ETH, try to pull from the base fee vault.
         if (ethToGive > address(this).balance) {
             address vault = $.baseFeeVault;
+            uint256 minBalance = $.minVaultBalance;
             /// @solidity memory-safe-assembly
             assembly {
                 if extcodesize(vault) {
-                    mstore(0x00, 0x3ccfd60b) // `withdraw()`.
-                    pop(call(gas(), vault, 0, 0x1c, 0x04, 0x00, 0x00))
+                    // If the vault has sufficient ETH, pull from it.
+                    if gt(balance(vault), add(sub(ethToGive, selfbalance()), minBalance)) {
+                        mstore(0x00, 0x3ccfd60b) // `withdraw()`.
+                        pop(call(gas(), vault, 0, 0x1c, 0x04, 0x00, 0x00))
+                        // We shall skip refunding back to the vault,
+                        // to simplify ETH accrual logic.
+                    }
                 }
             }
         }

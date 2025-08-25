@@ -38,3 +38,6 @@ wake-coverage.cov
 # Create2 build files
 .tmp
 create2
+
+# Coverage report
+report
