@@ -76,7 +76,7 @@ contract GasbackTest is SoladyTest {
         assertEq(pranker.balance, 0);
     }
 
-    function testGasbackWithAccruedToAccruedRecipient() public {
+    function testConvertGasbackWithAccruedToAccruedRecipient() public {
         address system = 0xffffFFFfFFffffffffffffffFfFFFfffFFFfFFfE;
         vm.prank(system);
         gasback.setAccruedRecipient(address(42));
