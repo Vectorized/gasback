@@ -131,7 +131,9 @@ contract Gasback {
         address accruedRecipient = _getGasbackStorage().accruedRecipient;
         /// @solidity memory-safe-assembly
         assembly {
-            if iszero(call(gas(), accruedRecipient, amount, 0x00, 0x00, 0x00, 0x00)) { revert(0x00, 0x00) }
+            if iszero(call(gas(), accruedRecipient, amount, 0x00, 0x00, 0x00, 0x00)) {
+                revert(0x00, 0x00)
+            }
         }
         return true;
     }

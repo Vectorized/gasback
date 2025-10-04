@@ -87,7 +87,7 @@ contract GasbackTest is SoladyTest {
         address pranker = address(111);
         vm.fee(baseFee);
         vm.deal(pranker, 1000 ether);
- 
+
         vm.prank(pranker);
         (bool success,) = address(gasback).call(abi.encode(gasToBurn));
         assertTrue(success);
