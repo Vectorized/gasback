@@ -34,7 +34,7 @@ contract Gasback {
         uint256 minVaultBalance;
         // The amount of ETH accrued by taking a cut from the gas burned.
         uint256 accrued;
-        // The address to send accrued ETH to.
+        // The recipient of the accrued ETH.
         address accruedRecipient;
         // A mapping of addresses authorized to withdraw the accrued ETH.
         mapping(address => bool) accuralWithdrawers;
