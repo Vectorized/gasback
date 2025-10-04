@@ -75,4 +75,30 @@ contract GasbackTest is SoladyTest {
         assertTrue(success);
         assertEq(pranker.balance, 0);
     }
+
+    function testConvertGasbackWithAccruedToAccruedRecipient() public {
+        address system = 0xffffFFFfFFffffffffffffffFfFFFfffFFFfFFfE;
+        vm.prank(system);
+        gasback.setAccruedRecipient(address(42));
+
+        uint256 baseFee = 1 ether;
+        uint256 gasToBurn = 333;
+
+        address pranker = address(111);
+        vm.fee(baseFee);
+        vm.deal(pranker, 1000 ether);
+
+        vm.prank(pranker);
+        (bool success,) = address(gasback).call(abi.encode(gasToBurn));
+        assertTrue(success);
+
+        uint256 accrued = gasback.accrued();
+
+        assertNotEq(accrued, 0);
+
+        vm.prank(pranker);
+        gasback.withdrawAccruedToAccruedRecipient(accrued);
+
+        assertEq(address(42).balance, accrued);
+    }
 }

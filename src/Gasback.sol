@@ -34,6 +34,8 @@ contract Gasback {
         uint256 minVaultBalance;
         // The amount of ETH accrued by taking a cut from the gas burned.
         uint256 accrued;
+        // The recipient of the accrued ETH.
+        address accruedRecipient;
         // A mapping of addresses authorized to withdraw the accrued ETH.
         mapping(address => bool) accuralWithdrawers;
     }
@@ -58,6 +60,7 @@ contract Gasback {
         $.gasbackMaxBaseFee = type(uint256).max;
         $.baseFeeVault = 0x4200000000000000000000000000000000000019;
         $.minVaultBalance = 0.42 ether;
+        $.accruedRecipient = 0x4200000000000000000000000000000000000019;
     }
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
@@ -117,6 +120,27 @@ contract Gasback {
         returns (bool)
     {
         _getGasbackStorage().accuralWithdrawers[addr] = authorized;
+        return true;
+    }
+
+    /// @dev Withdraws from the accrued amount to the accrued recipient.
+    function withdrawAccruedToAccruedRecipient(uint256 amount) public virtual returns (bool) {
+        // Checked math prevents underflow.
+        _getGasbackStorage().accrued -= amount;
+
+        address accruedRecipient = _getGasbackStorage().accruedRecipient;
+        /// @solidity memory-safe-assembly
+        assembly {
+            if iszero(call(gas(), accruedRecipient, amount, 0x00, 0x00, 0x00, 0x00)) {
+                revert(0x00, 0x00)
+            }
+        }
+        return true;
+    }
+
+    /// @dev Sets the accrued recipient.
+    function setAccruedRecipient(address value) public onlySystemOrThis returns (bool) {
+        _getGasbackStorage().accruedRecipient = value;
         return true;
     }
 
