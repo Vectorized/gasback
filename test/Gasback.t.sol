@@ -186,47 +186,35 @@ contract GasbackTest is SoladyTest {
         gasback.triggerBaseFeeVaultWithdraw(0);
     }
 
-    function testFallbackDoesNotAccrue() public {
-        vm.fee(100);
-        vm.prank(address(111));
-        (bool success,) = address(gasback).call(abi.encode(uint256(1000)));
-        assertTrue(success);
-        assertEq(gasback.accrued(), 0);
-    }
-
-    function testWithdrawAccruedRevertsWhenCallerUnauthorized() public {
+    function testWithdrawRevertsWhenCallerUnauthorized() public {
         address unauthorized = address(0xBAD);
-        assertFalse(gasback.isAuthorizedAccrualWithdrawer(unauthorized));
         vm.prank(unauthorized);
         vm.expectRevert();
-        gasback.withdrawAccrued(address(0xCAFE), 0);
-
-        assertEq(gasback.accrued(), 0);
+        gasback.withdraw(address(0xCAFE), 0);
     }
 
-    function testWithdrawReconcilesAccruedDownToBalance() public {
-        uint256 accruedAmount = 1 ether;
-        _setAccrued(accruedAmount);
-
-        vm.deal(address(gasback), accruedAmount);
+    function testWithdrawTransfersEthWhenCallerSystem() public {
+        address recipient = address(0xCAFE);
+        uint256 amount = 1 ether;
+        uint256 initialGasbackBalance = address(gasback).balance;
+        uint256 initialRecipientBalance = recipient.balance;
         vm.prank(SYSTEM);
-        assertTrue(gasback.withdraw(address(0xCAFE), accruedAmount / 4));
+        assertTrue(gasback.withdraw(recipient, amount));
 
-        uint256 remaining = accruedAmount - accruedAmount / 4;
-        assertEq(gasback.accrued(), remaining);
-        assertEq(address(gasback).balance, remaining);
+        assertEq(recipient.balance - initialRecipientBalance, amount);
+        assertEq(address(gasback).balance, initialGasbackBalance - amount);
     }
 
-    function testWithdrawLeavesAccruedWhenBufferCovers() public {
-        uint256 accruedAmount = 1 ether;
-        _setAccrued(accruedAmount);
+    function testWithdrawTransfersEthWhenCallerSelf() public {
+        address recipient = address(0xCAFE);
+        uint256 amount = 1 ether;
+        uint256 initialGasbackBalance = address(gasback).balance;
+        uint256 initialRecipientBalance = recipient.balance;
+        vm.prank(address(gasback));
+        assertTrue(gasback.withdraw(recipient, amount));
 
-        vm.deal(address(gasback), accruedAmount * 10);
-        vm.prank(SYSTEM);
-        assertTrue(gasback.withdraw(address(0xCAFE), accruedAmount));
-
-        assertEq(gasback.accrued(), accruedAmount);
-        assertEq(address(gasback).balance, accruedAmount * 9);
+        assertEq(recipient.balance - initialRecipientBalance, amount);
+        assertEq(address(gasback).balance, initialGasbackBalance - amount);
     }
 
     function testSetGasbackRatioNumeratorRevertsWhenValueAboveDenominator() public {
@@ -246,14 +234,5 @@ contract GasbackTest is SoladyTest {
     function _ethToGive(uint256 gasToBurn, uint256 baseFee) internal view returns (uint256) {
         return (gasToBurn * baseFee * gasback.gasbackRatioNumerator())
             / gasback.GASBACK_RATIO_DENOMINATOR();
-    }
-
-    function _setAccrued(uint256 amount) internal {
-        vm.store(address(gasback), _accruedSlot(), bytes32(amount));
-        assertEq(gasback.accrued(), amount);
-    }
-
-    function _accruedSlot() internal pure returns (bytes32) {
-        return bytes32(uint256(uint72(bytes9(keccak256("GASBACK_STORAGE")))) + 3);
     }
 }

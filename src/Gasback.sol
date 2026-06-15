@@ -30,10 +30,6 @@ contract Gasback {
         // recipient of the base fee vault, it can be configured to auto-pull
         // funds from the base fee vault when it runs out of ETH.
         address baseFeeVault;
-        // The amount of ETH accrued.
-        uint256 accrued;
-        // A mapping of addresses authorized to withdraw the accrued ETH.
-        mapping(address => bool) accrualWithdrawers;
     }
 
     /// @dev Returns a pointer to the storage struct.
@@ -77,56 +73,15 @@ contract Gasback {
     }
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
-    /*                     ACCRUAL FUNCTIONS                      */
-    /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
-
-    /// @dev Returns the amount of ETH accrued.
-    function accrued() public view virtual returns (uint256) {
-        return _getGasbackStorage().accrued;
-    }
-
-    /// @dev Withdraws from the accrued amount.
-    function withdrawAccrued(address to, uint256 amount) public virtual returns (bool) {
-        require(_getGasbackStorage().accrualWithdrawers[msg.sender]);
-        // Checked math prevents underflow.
-        _getGasbackStorage().accrued -= amount;
-        /// @solidity memory-safe-assembly
-        assembly {
-            if iszero(call(gas(), to, amount, 0x00, 0x00, 0x00, 0x00)) { revert(0x00, 0x00) }
-        }
-        return true;
-    }
-
-    /// @dev Returns whether `addr` is authorized to call `withdrawAccrued`.
-    function isAuthorizedAccrualWithdrawer(address addr) public view virtual returns (bool) {
-        return _getGasbackStorage().accrualWithdrawers[addr];
-    }
-
-    /// @dev Set whether `addr` is authorized to call `withdrawAccrued`.
-    function setAccrualWithdrawer(address addr, bool authorized)
-        public
-        onlySystemOrThis
-        returns (bool)
-    {
-        _getGasbackStorage().accrualWithdrawers[addr] = authorized;
-        return true;
-    }
-
-    /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
     /*                      ADMIN FUNCTIONS                       */
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
 
     /// @dev Withdraws ETH from this contract.
-    /// @dev Reconciles the accrued ledger so it never overstates the ETH backing it: if this
-    /// withdrawal leaves the balance below `accrued`, `accrued` is lowered to the remaining balance.
     function withdraw(address to, uint256 amount) public onlySystemOrThis returns (bool) {
         /// @solidity memory-safe-assembly
         assembly {
             if iszero(call(gas(), to, amount, 0x00, 0x00, 0x00, 0x00)) { revert(0x00, 0x00) }
         }
-        GasbackStorage storage $ = _getGasbackStorage();
-        uint256 balanceAfter = address(this).balance;
-        if ($.accrued > balanceAfter) $.accrued = balanceAfter;
         return true;
     }
 
@@ -216,7 +171,6 @@ contract Gasback {
             ethToGive = 0;
             gasToBurn = 0;
         }
-
         /// @solidity memory-safe-assembly
         assembly {
             if gasToBurn {
