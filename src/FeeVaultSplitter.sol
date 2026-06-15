@@ -59,7 +59,7 @@ contract FeeVaultSplitter is PaymentSplitter, ReentrancyGuard {
      * @dev Attempts to release payments for a slice of payees, skipping zero-due payees and emitting failures instead of
      * reverting on send failures.
      */
-    function distribute(uint256 start, uint256 end) public {
+    function distribute(uint256 start, uint256 end) public nonReentrant {
         _distribute(start, end);
     }
 
