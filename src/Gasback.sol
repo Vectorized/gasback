@@ -30,12 +30,10 @@ contract Gasback {
         // recipient of the base fee vault, it can be configured to auto-pull
         // funds from the base fee vault when it runs out of ETH.
         address baseFeeVault;
-        // The amount of ETH accrued by taking a cut from the gas burned (after the base fee vault share has been taken).
+        // The amount of ETH accrued.
         uint256 accrued;
         // A mapping of addresses authorized to withdraw the accrued ETH.
         mapping(address => bool) accrualWithdrawers;
-        // The numerator for the share of the base fee vault.
-        uint256 baseFeeVaultShareNumerator;
     }
 
     /// @dev Returns a pointer to the storage struct.
@@ -57,7 +55,6 @@ contract Gasback {
         $.gasbackRatioNumerator = 0.6 ether;
         $.gasbackMaxBaseFee = type(uint256).max;
         $.baseFeeVault = 0x4200000000000000000000000000000000000019;
-        $.baseFeeVaultShareNumerator = 0.6 ether;
     }
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
@@ -77,11 +74,6 @@ contract Gasback {
     /// @dev The base fee vault on OP stack chains.
     function baseFeeVault() public view virtual returns (address) {
         return _getGasbackStorage().baseFeeVault;
-    }
-
-    /// @dev The numerator for the share of the base fee vault.
-    function baseFeeVaultShareNumerator() public view virtual returns (uint256) {
-        return _getGasbackStorage().baseFeeVaultShareNumerator;
     }
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
@@ -140,10 +132,8 @@ contract Gasback {
 
     /// @dev Sets the numerator for the gasback ratio.
     function setGasbackRatioNumerator(uint256 value) public onlySystemOrThis returns (bool) {
-        GasbackStorage storage $ = _getGasbackStorage();
         require(value <= GASBACK_RATIO_DENOMINATOR);
-        require(value <= $.baseFeeVaultShareNumerator);
-        $.gasbackRatioNumerator = value;
+        _getGasbackStorage().gasbackRatioNumerator = value;
         return true;
     }
 
@@ -159,68 +149,29 @@ contract Gasback {
         return true;
     }
 
-    /// @dev Sets the numerator for the share of the base fee vault.
-    /// @dev When the base fee vault's recipient is a splitter exposing `shares`/`totalShares`,
-    /// `value` must equal this contract's live share `(shares(this) * GASBACK_RATIO_DENOMINATOR) /
-    /// totalShares`, so the fallback's `expectedShare` estimate stays consistent with the ETH the
-    /// splitter actually routes back. The check is skipped when no such splitter is detectable
-    /// (unset/codeless vault, no `recipient()`, a non-splitter recipient, or the EIP-7702 setup
-    /// where the recipient is this contract). Re-point the vault before calling this, and re-call
-    /// this after changing the vault, to keep the numerator consistent.
-    function setBaseFeeVaultShareNumerator(uint256 value) public onlySystemOrThis returns (bool) {
-        GasbackStorage storage $ = _getGasbackStorage();
-        require(value <= GASBACK_RATIO_DENOMINATOR);
-        require(value >= $.gasbackRatioNumerator);
-        (bool applicable, uint256 expected) = _expectedBaseFeeVaultShareNumerator();
-        require(!applicable || value == expected);
-        $.baseFeeVaultShareNumerator = value;
-        return true;
-    }
-
-    /// @dev Returns this contract's expected base fee vault share numerator derived from live
-    /// on-chain state: `(splitter.shares(this) * GASBACK_RATIO_DENOMINATOR) / splitter.totalShares()`,
-    /// where the splitter is the base fee vault's `recipient()`. `applicable` is false (and `expected`
-    /// must be ignored) when there is no readable splitter topology, namely: the base fee vault is
-    /// unset or has no code; it has no readable `recipient()`; the recipient is this contract (the
-    /// EIP-7702 setup) or has no code; or `totalShares()`/`shares(address)` is unreadable or zero.
-    /// All external reads are guarded `staticcall`s so an absent/incompatible recipient never reverts
-    /// this path; it simply makes the consistency check inapplicable.
-    function _expectedBaseFeeVaultShareNumerator()
-        internal
-        view
-        returns (bool applicable, uint256 expected)
-    {
-        address vault = _getGasbackStorage().baseFeeVault;
-        if (vault == address(0) || vault.code.length == 0) return (false, 0);
-
-        (bool ok, bytes memory data) = vault.staticcall(abi.encodeWithSignature("recipient()"));
-        if (!ok || data.length != 32) return (false, 0);
-        address splitter = abi.decode(data, (address));
-        if (splitter == address(this) || splitter == address(0) || splitter.code.length == 0) {
-            return (false, 0);
-        }
-
-        (ok, data) = splitter.staticcall(abi.encodeWithSignature("totalShares()"));
-        if (!ok || data.length != 32) return (false, 0);
-        uint256 totalShares = abi.decode(data, (uint256));
-        if (totalShares == 0) return (false, 0);
-
-        (ok, data) = splitter.staticcall(abi.encodeWithSignature("shares(address)", address(this)));
-        if (!ok || data.length != 32) return (false, 0);
-        uint256 gasbackShares = abi.decode(data, (uint256));
-
-        return (true, (gasbackShares * GASBACK_RATIO_DENOMINATOR) / totalShares);
-    }
-
     /// @dev A noop function.
     function noop() public payable returns (bool) {
         return true;
+    }
+
+    /// @dev Pulls from the base fee vault and reverts unless this contract has enough ETH after.
+    function triggerBaseFeeVaultWithdraw(uint256 expectedSelfBalanceAfter) external onlySelf {
+        (bool success,) =
+            _getGasbackStorage().baseFeeVault.call(abi.encodeWithSignature("withdraw()"));
+        require(success);
+        require(address(this).balance >= expectedSelfBalanceAfter);
     }
 
     /// @dev Guards the function such that it can only be called either by
     /// the system contract, or by the contract itself (as an EIP-7702 delegated EOA).
     modifier onlySystemOrThis() {
         require(msg.sender == _SYSTEM_ADDRESS || msg.sender == address(this));
+        _;
+    }
+
+    /// @dev Guards the function such that it can only be called by the contract itself.
+    modifier onlySelf() {
+        require(msg.sender == address(this));
         _;
     }
 
@@ -246,24 +197,16 @@ contract Gasback {
         GasbackStorage storage $ = _getGasbackStorage();
 
         uint256 ethFromGas = gasToBurn * block.basefee;
-        uint256 ethFromVaultShare =
-            (ethFromGas * $.baseFeeVaultShareNumerator) / GASBACK_RATIO_DENOMINATOR;
         uint256 ethToGive = (ethFromGas * $.gasbackRatioNumerator) / GASBACK_RATIO_DENOMINATOR;
 
         uint256 selfBalance = address(this).balance;
         // If the contract has insufficient ETH, try to pull from the base fee vault.
         if (ethToGive > selfBalance && block.basefee <= $.gasbackMaxBaseFee) {
-            address vault = $.baseFeeVault;
-            uint256 shortfall = ethToGive - selfBalance;
-            uint256 vaultBalance = vault.balance;
-            uint256 expectedShare =
-                (vaultBalance * $.baseFeeVaultShareNumerator) / GASBACK_RATIO_DENOMINATOR;
             /// @solidity memory-safe-assembly
             assembly {
-                if and(extcodesize(vault), iszero(lt(expectedShare, shortfall))) {
-                    mstore(0x00, 0x3ccfd60b) // `withdraw()`.
-                    pop(call(gas(), vault, 0, 0x1c, 0x04, 0x00, 0x00))
-                }
+                mstore(0x00, 0xc70746b1) // `triggerBaseFeeVaultWithdraw(uint256)`.
+                mstore(0x20, ethToGive)
+                pop(call(gas(), address(), 0, 0x1c, 0x24, 0x00, 0x00))
             }
         }
 
@@ -272,12 +215,6 @@ contract Gasback {
             // Do a pass through.
             ethToGive = 0;
             gasToBurn = 0;
-        }
-
-        if (gasToBurn != 0) {
-            unchecked {
-                $.accrued += ethFromVaultShare - ethToGive;
-            }
         }
 
         /// @solidity memory-safe-assembly
