@@ -26,7 +26,7 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: nightly
+          version: v1.7.1
 
       - name: Install Dependencies
         run: forge install
@@ -57,4 +57,3 @@ jobs:
           check_filenames: true
           ignore_words_list: usera
           skip: ./.git,package-lock.json,ackee-blockchain-solady-report.pdf,EIP712Mock.sol
-
