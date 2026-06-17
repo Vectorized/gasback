@@ -29,7 +29,9 @@ jobs:
           version: v1.7.1
 
       - name: Install Dependencies
-        run: forge install
+        run: |
+          forge install
+          forge soldeer install --config-location soldeer
 
       - name: Run Tests with ${{ matrix.profile }}
         run: >
