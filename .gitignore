@@ -41,3 +41,5 @@ create2
 
 # Coverage report
 report
+
+dependencies/

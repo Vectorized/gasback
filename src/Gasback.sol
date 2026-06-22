@@ -30,14 +30,6 @@ contract Gasback {
         // recipient of the base fee vault, it can be configured to auto-pull
         // funds from the base fee vault when it runs out of ETH.
         address baseFeeVault;
-        // The minimum balance of the base fee vault.
-        uint256 minVaultBalance;
-        // The amount of ETH accrued by taking a cut from the gas burned.
-        uint256 accrued;
-        // The recipient of the accrued ETH.
-        address accruedRecipient;
-        // A mapping of addresses authorized to withdraw the accrued ETH.
-        mapping(address => bool) accuralWithdrawers;
     }
 
     /// @dev Returns a pointer to the storage struct.
@@ -56,11 +48,9 @@ contract Gasback {
 
     constructor() payable {
         GasbackStorage storage $ = _getGasbackStorage();
-        $.gasbackRatioNumerator = 0.8 ether;
+        $.gasbackRatioNumerator = 0.6 ether;
         $.gasbackMaxBaseFee = type(uint256).max;
         $.baseFeeVault = 0x4200000000000000000000000000000000000019;
-        $.minVaultBalance = 0.42 ether;
-        $.accruedRecipient = 0x4200000000000000000000000000000000000019;
     }
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
@@ -80,68 +70,6 @@ contract Gasback {
     /// @dev The base fee vault on OP stack chains.
     function baseFeeVault() public view virtual returns (address) {
         return _getGasbackStorage().baseFeeVault;
-    }
-
-    /// @dev The minimum balance of the base fee vault that allows a pull withdrawal.
-    function minVaultBalance() public view virtual returns (uint256) {
-        return _getGasbackStorage().minVaultBalance;
-    }
-
-    /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
-    /*                     ACCURAL FUNCTIONS                      */
-    /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
-
-    /// @dev Returns the amount of ETH accrued.
-    function accrued() public view virtual returns (uint256) {
-        return _getGasbackStorage().accrued;
-    }
-
-    /// @dev Withdraws from the accrued amount.
-    function withdrawAccrued(address to, uint256 amount) public virtual returns (bool) {
-        require(_getGasbackStorage().accuralWithdrawers[msg.sender]);
-        // Checked math prevents underflow.
-        _getGasbackStorage().accrued -= amount;
-        /// @solidity memory-safe-assembly
-        assembly {
-            if iszero(call(gas(), to, amount, 0x00, 0x00, 0x00, 0x00)) { revert(0x00, 0x00) }
-        }
-        return true;
-    }
-
-    /// @dev Returns whether `addr` is authorized to call `withdrawAccrued`.
-    function isAuthorizedAccuralWithdrawer(address addr) public view virtual returns (bool) {
-        return _getGasbackStorage().accuralWithdrawers[addr];
-    }
-
-    /// @dev Set whether `addr` is authorized to call `withdrawAccrued`.
-    function setAccuralWithdrawer(address addr, bool authorized)
-        public
-        onlySystemOrThis
-        returns (bool)
-    {
-        _getGasbackStorage().accuralWithdrawers[addr] = authorized;
-        return true;
-    }
-
-    /// @dev Withdraws from the accrued amount to the accrued recipient.
-    function withdrawAccruedToAccruedRecipient(uint256 amount) public virtual returns (bool) {
-        // Checked math prevents underflow.
-        _getGasbackStorage().accrued -= amount;
-
-        address accruedRecipient = _getGasbackStorage().accruedRecipient;
-        /// @solidity memory-safe-assembly
-        assembly {
-            if iszero(call(gas(), accruedRecipient, amount, 0x00, 0x00, 0x00, 0x00)) {
-                revert(0x00, 0x00)
-            }
-        }
-        return true;
-    }
-
-    /// @dev Sets the accrued recipient.
-    function setAccruedRecipient(address value) public onlySystemOrThis returns (bool) {
-        _getGasbackStorage().accruedRecipient = value;
-        return true;
     }
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
@@ -176,21 +104,29 @@ contract Gasback {
         return true;
     }
 
-    /// @dev Sets the minimum balance of the base fee vault.
-    function setMinVaultBalance(uint256 value) public onlySystemOrThis returns (bool) {
-        _getGasbackStorage().minVaultBalance = value;
-        return true;
-    }
-
     /// @dev A noop function.
     function noop() public payable returns (bool) {
         return true;
+    }
+
+    /// @dev Pulls from the base fee vault and reverts unless this contract has enough ETH after.
+    function triggerBaseFeeVaultWithdraw(uint256 expectedSelfBalanceAfter) external onlySelf {
+        (bool success,) =
+            _getGasbackStorage().baseFeeVault.call(abi.encodeWithSignature("withdraw()"));
+        require(success);
+        require(address(this).balance >= expectedSelfBalanceAfter);
     }
 
     /// @dev Guards the function such that it can only be called either by
     /// the system contract, or by the contract itself (as an EIP-7702 delegated EOA).
     modifier onlySystemOrThis() {
         require(msg.sender == _SYSTEM_ADDRESS || msg.sender == address(this));
+        _;
+    }
+
+    /// @dev Guards the function such that it can only be called by the contract itself.
+    modifier onlySelf() {
+        require(msg.sender == address(this));
         _;
     }
 
@@ -220,20 +156,12 @@ contract Gasback {
 
         uint256 selfBalance = address(this).balance;
         // If the contract has insufficient ETH, try to pull from the base fee vault.
-        if (ethToGive > selfBalance) {
-            address vault = $.baseFeeVault;
-            uint256 minBalance = $.minVaultBalance;
+        if (ethToGive > selfBalance && block.basefee <= $.gasbackMaxBaseFee) {
             /// @solidity memory-safe-assembly
             assembly {
-                if extcodesize(vault) {
-                    // If the vault has sufficient ETH, pull from it.
-                    if gt(balance(vault), add(sub(ethToGive, selfBalance), minBalance)) {
-                        mstore(0x00, 0x3ccfd60b) // `withdraw()`.
-                        pop(call(gas(), vault, 0, 0x1c, 0x04, 0x00, 0x00))
-                        // Return ETH to vault to ensure that it has `minBalance`.
-                        pop(call(gas(), vault, minBalance, 0x00, 0x00, 0x00, 0x00))
-                    }
-                }
+                mstore(0x00, 0xc70746b1) // `triggerBaseFeeVaultWithdraw(uint256)`.
+                mstore(0x20, ethToGive)
+                pop(call(gas(), address(), 0, 0x1c, 0x24, 0x00, 0x00))
             }
         }
 
@@ -243,11 +171,6 @@ contract Gasback {
             ethToGive = 0;
             gasToBurn = 0;
         }
-
-        unchecked {
-            $.accrued += ethFromGas - ethToGive;
-        }
-
         /// @solidity memory-safe-assembly
         assembly {
             if gasToBurn {

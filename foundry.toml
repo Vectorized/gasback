@@ -4,7 +4,7 @@
 
 # The Default Profile
 [profile.default]
-solc_version = "0.8.30"
+solc_version = "0.8.34"
 evm_version = "prague"
 auto_detect_solc = false
 optimizer = true
@@ -15,7 +15,8 @@ always_use_create_2_factory = true
 remappings = [
   "murky=lib/murky",
   "dn404/=lib/dn404/src",
-  "solady=lib/solady/src"
+  "solady=lib/solady/src",
+  "@openzeppelin/contracts/=dependencies/@openzeppelin-contracts-4.9.5/"
 ]
 
 [fmt]
