@@ -4,6 +4,9 @@ pragma solidity ^0.8.7;
 /// @dev A contract that converts a portion of the gas burned into ETH.
 /// This contract holds ETH deposited by the sequencer, which will be
 /// redistributed to callers.
+/// @dev Configuration notes:
+/// - The baseFeeVault's WITHDRAWAL_NETWORK should be configured to withdraw to the network this contract is deployed on.
+/// - The baseFeeVault's MIN_WITHDRAWAL_AMOUNT should be set to a reasonable value below ethToGive in order for withdrawals to be successful.
 contract Gasback {
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
     /*                         CONSTANTS                          */
@@ -46,6 +49,7 @@ contract Gasback {
     /*                        CONSTRUCTOR                         */
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
 
+    /// @dev When using this contract with EIP-7702, setters must be called to configure the constructor values.
     constructor() payable {
         GasbackStorage storage $ = _getGasbackStorage();
         $.gasbackRatioNumerator = 0.6 ether;
@@ -136,6 +140,7 @@ contract Gasback {
 
     /// @dev For the gasback logic.
     fallback() external payable {
+        require(tx.gasprice != 0, "Gasback: gasprice is 0"); // Prevents L1 -> L2 deposits from being used.
         uint256 gasToBurn;
 
         /// @solidity memory-safe-assembly
@@ -159,7 +164,7 @@ contract Gasback {
         if (ethToGive > selfBalance && block.basefee <= $.gasbackMaxBaseFee) {
             /// @solidity memory-safe-assembly
             assembly {
-                mstore(0x00, 0xc70746b1) // `triggerBaseFeeVaultWithdraw(uint256)`.
+                mstore(0x00, 0xc70746b1) // `triggerBaseFeeVaultWithdraw(uint256)`. we don't check success here because it will revert if the base fee vault is out of ETH.
                 mstore(0x20, ethToGive)
                 pop(call(gas(), address(), 0, 0x1c, 0x24, 0x00, 0x00))
             }
