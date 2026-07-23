@@ -582,4 +582,3 @@ contract FeeVaultSplitterTest is SoladyTest {
         assertEq(address(splitter).balance, 0);
     }
 }
-
