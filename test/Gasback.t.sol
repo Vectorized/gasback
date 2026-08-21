@@ -32,6 +32,7 @@ contract GasbackTest is SoladyTest {
     Gasback public gasback;
 
     function setUp() public {
+        vm.txGasPrice(1);
         gasback = new Gasback();
         vm.deal(address(gasback), 2 ** 160);
     }
